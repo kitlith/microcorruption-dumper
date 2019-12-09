@@ -3,7 +3,7 @@
 // @namespace   Kitlith
 // @match       https://*.microcorruption.com/cpu/debugger
 // @grant       GM_getResourceURL
-// @version     1.0
+// @version     0.0.1
 // @author      Kitlith
 // @require     microcorruption_wasm.js
 // @resource    wasm microcorruption_wasm_bg.wasm

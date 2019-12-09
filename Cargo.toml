@@ -24,7 +24,6 @@ console_error_panic_hook = { version = "0.1.1", optional = true }
 # Unfortunately, `wee_alloc` requires nightly Rust when targeting wasm for now.
 wee_alloc = { version = "0.4.2", optional = true }
 
-faerie = { path = "../faerie" }
 target-lexicon = "0.9.0"
 goblin = "0.1"
 scroll = "0.10"
@@ -36,6 +35,10 @@ serde_derive = "^1.0.59"
 [dependencies.wasm-bindgen]
 version = "^0.2"
 features = ["serde-serialize"]
+
+[dependencies.faerie]
+git = "https://github.com/kitlith/faerie"
+branch = "mcorrupt_test"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.2"
