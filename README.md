@@ -3,8 +3,7 @@ _Liberate yourself from the microcorruption website_
 
 ## Usage
 You'll need a userscript manager to use this. This userscript was tested with Violentmonkey.
-
-Grab the userscript from releases. TODO: elaborate more.
+Grab the userscript from [jsDelivr](https://cdn.jsdelivr.net/gh/kitlith/microcorruption-dumper/pkg/mcorrupt.user.js).
 
 To dump a microcorruption level, type `dump` in the on-page debugger.
 This script will perform a memory dump and parse the page for symbols,
