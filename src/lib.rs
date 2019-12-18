@@ -6,6 +6,7 @@ use goblin::{elf, container::{Ctx, Endian, Container}};
 use scroll::{Pread, Pwrite};
 use target_lexicon::{Architecture, BinaryFormat, Environment, OperatingSystem, Triple, Vendor};
 use std::collections::BTreeMap;
+use byteorder::{ByteOrder, LE};
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -29,6 +30,8 @@ pub fn gen_elf(name: &str, memory: Box<[u8]>, symbols: &JsValue) -> Result<Box<[
         binary_format: BinaryFormat::Elf
     };
 
+    let entry_point = LE::read_u16(&memory[0xfffe..]).into();
+
     let mut artifact = ArtifactBuilder::new(target)
         .name(name.to_string())
         .library(false)
@@ -47,39 +50,44 @@ pub fn gen_elf(name: &str, memory: Box<[u8]>, symbols: &JsValue) -> Result<Box<[
 
     // Now let's modify the output of that to create a real executable, so that it works with Ghidra.
 
-    // read header
-    let ctx = Ctx::new(Container::Little, Endian::Little);
-    let mut header: elf::Header = bin.pread_with(0, ctx.le).map_err(|e: goblin::error::Error| e.to_string())?;
+    let mut elf: goblin::elf::Elf = bin.pread(0).map_err(|e: goblin::error::Error| e.to_string())?;
 
     // make it an executable
-    header.e_type = elf::header::ET_EXEC;
-    header.e_entry = 0x4400;
-    header.e_flags = 0x00000112; // EXEC_P, HAS_SYMS, D_PAGED
-
-    // read section header
-    let sheader: elf::SectionHeader = bin.pread_with((header.e_shoff + (header.e_shentsize as u64 * 3)) as usize, ctx).map_err(|e: goblin::error::Error| e.to_string())?;
+    elf.header.e_type = elf::header::ET_EXEC;
+    elf.header.e_entry = entry_point;
+    elf.header.e_flags = 0x00000112; // EXEC_P, HAS_SYMS, D_PAGED
 
     // build a ProgramHeader
-    let mut pheader: elf::ProgramHeader = elf::ProgramHeader::new();
-    pheader.read(); pheader.write(); pheader.executable(); // rwx
-    pheader.p_offset = sheader.sh_offset;
-    pheader.p_vaddr = 0;
-    pheader.p_paddr = 0;
-    pheader.p_filesz = sheader.sh_size;
-    pheader.p_memsz = sheader.sh_size;
+    let pheader = elf.section_headers.iter()
+        .find(|h| h.sh_flags & elf::section_header::SHF_ALLOC as u64 != 0)
+        .map(|section| elf::ProgramHeader {
+            p_type: elf::program_header::PT_LOAD,
+            p_flags: 7, // rwx, probably // TODO
+            p_offset: section.sh_offset,
+            p_vaddr: 0,
+            p_paddr: 0,
+            p_filesz: section.sh_size,
+            p_memsz: section.sh_size,
+            p_align: 0x10000
+        }).ok_or("missing load section")?;
+
+    let ctx = Ctx::new(Container::Little, Endian::Little);
 
     // locate the ProgramHeader
-    header.e_phoff = bin.len() as u64; // end of file. TODO: alignment?
-    header.e_phentsize = elf::ProgramHeader::size(ctx) as u16;
-    header.e_phnum = 1;
+    elf.header.e_phoff = bin.len() as u64; // end of file. TODO: alignment?
+    elf.header.e_phentsize = elf::ProgramHeader::size(ctx) as u16;
+    elf.header.e_phnum = 1;
+
+    let header = elf.header;
+    drop(elf);
+
+    // write the updated header
+    bin.pwrite_with(header, 0, ctx.le).map_err(|e| e.to_string())?;
 
     // write ProgramHeader
     let mut phbin = vec![0; header.e_phentsize as usize];
     phbin.pwrite_with(pheader, 0, ctx).map_err(|e| e.to_string())?;
     bin.extend(phbin);
-
-    // write the updated header
-    bin.pwrite_with(header, 0, ctx.le).map_err(|e| e.to_string())?;
 
     Ok(bin.into_boxed_slice())
 }
